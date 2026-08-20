@@ -5,6 +5,7 @@
 > đo lường và **lập luận**, không chấm tốc độ tuyệt đối.
 
 **Họ Tên:** Nguyễn Duy Hải Bằng
+**Mã sinh viên (MSSV):** 2A202601225
 **Cohort:** A20-K1
 **Ngày submit:** 2026-08-20
 
