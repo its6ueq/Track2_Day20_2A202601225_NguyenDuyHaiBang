@@ -24,7 +24,7 @@
   },
   "platform": {
     "system": "Linux",
-    "release": "6.19.10-300.fc44.x86_64",
+    "release": "7.1.8-200.fc44.x86_64",
     "machine": "x86_64",
     "python": "3.14.7"
   },
