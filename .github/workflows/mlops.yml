@@ -1,0 +1,141 @@
+name: MLOps Pipeline
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'data/**.dvc'
+      - 'src/**.py'
+      - 'params.yaml'
+  workflow_dispatch:
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # JOB 1 - UNIT TEST
+  # Chay unit tests tren du lieu ao (khong can ket noi cloud storage).
+  # Neu co bat ky test nao that bai, pipeline dung lai o day va khong tien hanh
+  # huan luyen hay trien khai.
+  # ---------------------------------------------------------------------------
+  test:
+    name: Unit Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: pytest tests/ -v
+
+
+  # ---------------------------------------------------------------------------
+  # JOB 2 - TRAIN
+  # Xac thuc cloud storage, pull du lieu bang DVC, huan luyen mo hinh, upload artifact.
+  # Chi chay khi Job 1 (Unit Test) hoan thanh thanh cong.
+  # ---------------------------------------------------------------------------
+  train:
+    name: Train
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      accuracy: ${{ steps.read_metrics.outputs.accuracy }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Authenticate to Cloud Storage
+        run: |
+          echo '${{ secrets.CLOUD_CREDENTIALS }}' > /tmp/sa-key.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa-key.json" >> $GITHUB_ENV
+
+      - name: Pull data with DVC
+        run: dvc pull data/train_phase1.csv.dvc data/eval.csv.dvc
+
+      - name: Train model
+        run: python src/train.py
+
+      - name: Read metrics
+        id: read_metrics
+        run: |
+          ACC=$(python -c "import json; d=json.load(open('outputs/metrics.json')); print(d['accuracy'])")
+          echo "accuracy=$ACC" >> $GITHUB_OUTPUT
+
+      - name: Upload model to Cloud Storage
+        env:
+          CLOUD_BUCKET: ${{ secrets.CLOUD_BUCKET }}
+        run: |
+          python - <<'EOF'
+          import os
+          from google.cloud import storage
+          bucket_name = os.environ["CLOUD_BUCKET"]
+          client = storage.Client()
+          bucket = client.bucket(bucket_name)
+          blob = bucket.blob("models/latest/model.pkl")
+          blob.upload_from_filename("models/model.pkl")
+          print(f"Uploaded models/model.pkl to gs://{bucket_name}/models/latest/model.pkl")
+          EOF
+
+      - name: Save metrics as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: metrics
+          path: outputs/metrics.json
+
+
+  # ---------------------------------------------------------------------------
+  # JOB 3 - EVAL
+  # Kiem tra nguong chat luong (accuracy >= 0.70).
+  # Pipeline dung lai o day neu mo hinh chua dat yeu cau.
+  # Chi chay khi Job 2 (Train) hoan thanh thanh cong.
+  # ---------------------------------------------------------------------------
+  eval:
+    name: Eval
+    needs: train
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Check eval gate
+        run: |
+          python - <<'EOF'
+          acc = float("${{ needs.train.outputs.accuracy }}")
+          print(f"Evaluated model accuracy: {acc:.4f}")
+          if acc < 0.70:
+              raise SystemExit(f"FAILED: accuracy {acc:.4f} < 0.70. Cancelled deploy.")
+          print("PASSED: Eval threshold met (>= 0.70). Proceeding to deployment.")
+          EOF
+
+
+  # ---------------------------------------------------------------------------
+  # JOB 4 - DEPLOY
+  # Trien khai len VM qua SSH.
+  # Chi chay khi Job 3 (Eval) hoan thanh thanh cong.
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: Deploy
+    needs: eval
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: SSH deploy to VM
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            sudo systemctl restart mlops-serve
+            sleep 5
+            curl -sf http://localhost:8000/health && echo "Health check passed." || exit 1
