@@ -70,11 +70,11 @@ _(Nếu dùng cloud fallback: nói rõ vì sao — RAM < 8 GB, setup fail, v.v. 
 
 | Day | Piece | Real hay stub? |
 |---|---|---|
-| N16 Cloud/IaC | Doc Ingestion & Chunking | real |
-| N17 Data pipeline | Embedding Generation | stub |
-| N18 Lakehouse | Vector Index & Retrieval | stub |
-| N19 Vector + features | Prompt Construction | real |
-| N20 Serving | llama-server | real |
+| N16 Cloud/IaC | Doc Ingestion & Chunking | **stub** — `TOY_DOCS`, 6 doc hard-code trong `pipeline.py`, không có ingestion/chunking thật |
+| N17 Data pipeline | Embedding Generation | stub — không chạy `--embed-url`, rơi về keyword fallback (0.0 ms) |
+| N18 Lakehouse | Vector Index & Retrieval | stub — keyword overlap scoring trên list in-memory |
+| N19 Vector + features | Prompt Construction | real (code `build_prompt()` chạy thật) nhưng context đầu vào lấy từ stub N16/N18 |
+| N20 Serving | llama-server | real — HTTP `/v1/chat/completions` tới llama-server b10488 |
 
 **Latency split** (mean của 3 query, từ output của `pipeline.py`):
 
@@ -114,15 +114,11 @@ Khi để default `-t 16`, llama.cpp buộc phải thực thi các điểm đồ
 > Bỏ trống nếu không làm. Xem `bonus/README.md`. Đừng làm hết — **một** finding sâu
 > ăn điểm hơn năm bảng nông.
 
-**Đã làm:** _(để trống nếu không làm)_
+**Đã làm:** _(không làm bonus track)_
 
 **Numbers:**
 
-```
-before:  0
-after:   0
-speedup: 1.0x
-```
+_(không có — xem §5 cho before/after của base track)_
 
 **Điều này nói lên gì mà deck chưa nói:**
 

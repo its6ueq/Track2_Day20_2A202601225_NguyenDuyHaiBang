@@ -31,10 +31,11 @@ Dominant stage: **llm** (100% of total)
 ### Component Declaration & Pipeline Latency Analysis
 
 - **Module Status Declaration**:
-  - **N16 (Document Ingestion & Chunking)**: **Real** (parses and splits domain text documents).
-  - **N17 (Embedding Generation)**: **Stub** (0.0 ms; uses in-memory keyword matching fallback instead of dense vector model).
-  - **N18 (Vector Store / Retrieval Index)**: **Stub** (0.0 ms; keyword overlap scoring).
-  - **N19 (LLM Generation & Serving)**: **Real** (17,083.5 ms; calls `llama-server` `/v1/chat/completions` API via HTTP).
+  - **N16 (Document Ingestion & Chunking)**: **Stub** — the 6 documents come from the hard-coded `TOY_DOCS` list in `pipeline.py`; no ingestion or chunking code of my own runs.
+  - **N17 (Embedding Generation)**: **Stub** (0.0 ms; no `--embed-url` server, so it falls back to keyword matching instead of a dense vector model).
+  - **N18 (Vector Store / Retrieval Index)**: **Stub** (0.0 ms; keyword overlap scoring over the in-memory list).
+  - **N19 (Vector + features / Prompt Construction)**: **Real code** (`build_prompt()` assembles system prompt + retrieved context per query) but it is fed by the stubbed N16/N18 above, so the retrieval quality is toy.
+  - **N20 (Serving)**: **Real** (17,083.5 ms; HTTP calls to `llama-server` b10488 `/v1/chat/completions`).
 - **Dominant Stage**: **LLM Generation** accounts for **100% of total pipeline latency** (17,083.5 ms out of 17,083.5 ms). This completely aligns with expectations for local CPU-based LLM inference.
 - **Latency Reduction Strategy**: To halve this pipeline's end-to-end latency, the target MUST be the LLM stage. The most effective optimization is **Prompt Caching (Prefix Caching)**: since RAG context documents are frequently reused across queries, caching the prefill KV state avoids redundant matrix operations on system and context tokens, reducing TTFT by 80-90%.
 
